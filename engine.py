@@ -7,7 +7,6 @@ Engine ids:
     0 - Standard variant
 
 todo:
-en passant
 pgn
 timer (+intervals)
 add comprehensive algebraic notation (i.e. +/-, ! etc)
@@ -77,9 +76,9 @@ class Engine:
     def print_instructions(self):
         print("""\
 Moves should be input in the form:
-    [Start Square]-[End Square]
+    [Start Square][End Square]
 e.g.
-    g1-f3
+    g1f3
 
 Illegal move inputs will be flagged.
 The board will be printed out after every turn.\n""")
@@ -126,14 +125,11 @@ class Chess: # main handler class
         self.engine.display_board()
 
     def _parse_input(self, move):
-        if not (len(move) == 5 and move[2] == "-"):
+        if not len(move) == 4 or move[:2] == move[-2:]:
             return False, None
 
-        if move[:2] == move[-2:]:
-            return False, None
-
-        letters = [move[0], move[3]]
-        nums = [move[1], move[4]]
+        letters = [move[0], move[2]]
+        nums = [move[1], move[3]]
 
         if not all(64 < ord(m) < 73 for m in letters):
             return False, None
@@ -141,7 +137,7 @@ class Chess: # main handler class
         if not all(n.isdigit() and 0 < int(n) < 9 for n in nums):
             return False, None
 
-        return True, move.split("-")
+        return True, [move[:2], move[2:]]
 
     def _build_engine(self, _id):
         if not _id:

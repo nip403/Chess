@@ -43,29 +43,163 @@ def generate_board(): # from white's perspective as index 0 = white
         [Pawn(0, -1) for _ in range(8)],
         [Rook(0), Knight(0), Bishop(0), Queen(0), King(0), Bishop(0), Knight(0), Rook(0)],
     ]
-    
 
 class PieceEngine:
     @classmethod
-    def in_check(self, colour, board):
+    def in_check(cls, colour, board):
         for y, row in enumerate(board):
             for x, piece in enumerate(row):
-                if piece.colour == colour and type(piece) == King:
+                if piece and piece.colour == colour and type(piece) == King:
                     king = [x, y]
 
-        if not "king" in globals():
-            raise f"{['Black', 'White'][colour]} king not on board."
-        
+        if not "king" in locals():
+            raise Exception(f"{['Black', 'White'][colour]} king not on board.")
+
         # knights
+        x, y = king
 
-        # bishop/queen
+        for i in [
+            [x+1, y+2],
+            [x-1, y+2],
+            [x+1, y-2],
+            [x-1, y-2],
+            [x+2, y+1],
+            [x+2, y-1],
+            [x-2, y+1],
+            [x-2, y-1],
+        ]:
+            if any(not 0 <= j < 8 for j in i):
+                continue
 
-        # rook/queen
+            piece = board[i[1]][i[0]]
+
+            if piece and not piece.colour == colour and type(piece) == Knight:
+                return True
 
         # pawn
+        x, y = king
+
+        if colour: # put in loop todo
+            for t in [-1, 1]: 
+                if x + t < 8 and y < 7 and board[y+1][x+t] and not board[y+1][x+t].colour and type(board[y+1][x+t]) == Pawn:
+                    return True
+        else:
+            for t in [-1, 1]: 
+                if x + t < 8 and y > 0 and board[y-1][x+t] and board[y-1][x+t].colour and type(board[y-1][x+t]) == Pawn:
+                    return True
 
         # if next to king
+        x, y = king
 
+        for i in [
+            [x-1, y-1],
+            [x, y-1],
+            [x+1, y-1],
+            [x-1, y],
+            [x+1, y],
+            [x-1, y+1],
+            [x, y+1],
+            [x+1, y+1],
+        ]:
+            if not all(0 <= j < 8 for j in i):
+                continue
+
+            if board[i[1]][i[0]] and type(board[i[1]][i[0]]) == King:
+                return True
+
+        # bishop/queen
+        x, y = king
+
+        while True:
+            x += 1
+            y += 1
+
+            if x > 7 or y > 7:
+                break
+            
+            if board[y][x]:
+                if not board[y][x].colour == colour and type(board[y][x]) in [Bishop, Queen]:
+                    return True
+
+                break
+
+        x, y = king
+
+        while True:
+            x += 1
+            y -= 1
+
+            if x > 7 or y < 0:
+                break
+                
+            if board[y][x]:
+                if not board[y][x].colour == colour and type(board[y][x]) in [Bishop, Queen]:
+                    return True
+
+                break
+
+        x, y = king
+
+        while True:
+            x -= 1
+            y += 1
+
+            if x < 0 or y > 7:
+                break
+
+            if board[y][x]:
+                if not board[y][x].colour == colour and type(board[y][x]) in [Bishop, Queen]:
+                    return True
+
+                break
+
+        x, y = king
+
+        while True:
+            x -= 1
+            y -= 1
+
+            if x < 0 or y < 0:
+                break
+
+            if board[y][x]:
+                if not board[y][x].colour == colour and type(board[y][x]) in [Bishop, Queen]:
+                    return True
+
+                break
+
+        # rook/queen
+        x, y = king
+        transpose = list(map(list, zip(*board)))
+
+        for i in range(x+1, 8):
+            if board[y][i]:
+                if not board[y][i].colour == colour and type(board[y][i]) in [Rook, Queen]:
+                    return True
+
+                break
+
+        for i in reversed(range(x)):
+            if board[y][i]:
+                if not board[y][i].colour == colour and type(board[y][i]) in [Rook, Queen]:
+                    return True
+
+                break
+
+        for i in range(y+1, 8):
+            if transpose[x][i]:
+                if not transpose[x][i].colour == colour and type(transpose[x][i]) in [Rook, Queen]:
+                    return True7
+
+                break
+
+        for i in reversed(range(y)):
+            if transpose[x][i]:
+                if not transpose[x][i].colour == colour and type(transpose[x][i]) in [Rook, Queen]:
+                    return True
+
+                break
+        
         return False
         
     @classmethod
