@@ -8,6 +8,5 @@ def main():
         if msg is not None:
             print(msg)
 
-
 if __name__ == "__main__":
     main()
