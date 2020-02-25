@@ -1,4 +1,4 @@
 # Chess
-An Python 3.7 chess library.
+A Python 3.7 chess library.
 
 # Docs
