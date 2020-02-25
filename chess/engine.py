@@ -1,4 +1,4 @@
-from core import Engine
+from chess.core import Engine
 import pygame
 import sys
 
@@ -85,4 +85,3 @@ class ChessText(_chess):
             return False, None
 
         return True, [move[:2], move[2:]]
-
