@@ -1,2 +1,2 @@
 # Chess
-An implementation of chess in Python 3.7.
+An Python 3.7 chess library.
