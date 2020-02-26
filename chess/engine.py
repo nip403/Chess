@@ -48,11 +48,6 @@ class ChessText(_chess):
         super().__init__(engineid)
 
     def input(self):
-        if self.engine.checkmate():
-            return "Checkmate"
-        elif self.engine.stalemate():
-            return "Stalemate"
-
         # input move, validate and parse
         move = input(f"{['Black', 'White'][self.engine.turn]}'s move: ").upper()
         legal, parsed = self._parse_input(move)
@@ -66,7 +61,11 @@ class ChessText(_chess):
         # send move to engine, validate and process
         resp = self.engine.move(parsed, self)
 
-        if not resp:
+        if resp == "X":
+            return "Checkmate"
+        elif resp == "x":
+            return "Stalemate"
+        elif not resp:
             return "Illegal move, re-enter."
 
         # pgn
