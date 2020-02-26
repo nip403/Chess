@@ -8,6 +8,7 @@ import sys
 class _chess:
     def __init__(self, engineid=0):
         self._build_engine(engineid)
+        self.pgn = [] # N.B. pgn is written in full, with pieces upper/lower case with colour
 
     def _build_engine(self, _id):
         if not _id:
@@ -63,13 +64,25 @@ class ChessText(_chess):
             return "Invalid move, re-enter."
 
         # send move to engine, validate and process
-        resp = self.engine.move(parsed)
+        resp = self.engine.move(parsed, self)
 
         if not resp:
             return "Illegal move, re-enter."
+
+        # pgn
             
         # print board
         self.engine.display_board()
+
+    #@property
+    #def FEN
+
+    def _promotion_choice(self):
+        while True:
+            choice = input("Promote pawn to Q/R/B/K: ").upper()
+
+            if len(choice) == 1 and choice in "QRBK":
+                return choice
 
     def _parse_input(self, move): # validation
         if not len(move) == 4 or move[:2] == move[-2:]:
@@ -85,3 +98,4 @@ class ChessText(_chess):
             return False, None
 
         return True, [move[:2], move[2:]]
+
