@@ -7,13 +7,44 @@ Engine ids:
 
 """
 
+"fix castling!!!!!!!!!!!!!!!!!!!!!!"
 
 # todo:
+#   castling
 #   pgn
 #   timer (+intervals)
 #   add comprehensive algebraic notation (i.e. +/-, ! etc)
 #   more helpful validation messages
 #   add comments for piece/move logic
+
+# piece objects
+class Pawn:
+    def __init__(self, colour, direction):
+        self.colour = colour
+        self.direction = direction
+        self.moved = False
+
+class Rook:
+    def __init__(self, colour):
+        self.colour = colour
+        self.moved = False
+
+class Bishop:
+    def __init__(self, colour):
+        self.colour = colour
+
+class Knight:
+    def __init__(self, colour):
+        self.colour = colour
+
+class Queen:
+    def __init__(self, colour):
+        self.colour = colour
+
+class King:
+    def __init__(self, colour):
+        self.colour = colour
+        self.moved = False
 
 class Engine:
     meta = "Chess"
@@ -28,7 +59,7 @@ class Engine:
 
         self.en_passant_eligible = [[], []] # white eligible, black eligible
 
-    def move(self, move):
+    def move(self, move, handle):
         start, end = move
 
         # convert to array indices
@@ -47,17 +78,43 @@ class Engine:
         # get available moves
         moves = PieceEngine.get_moves(piece, [start_x, start_y], self.board, self.en_passant_eligible)
 
+        # castling
+        if type(piece) == King:
+            moves, castle_moves = moves
+
+            if [end_x, end_y] in castle_moves:
+                self.board[end_y][end_x] = piece
+                self.board[start_y][start_x] = 0
+
+                if end_x < start_x:
+                    self.board[end_y][0].moved = True
+                    self.board[end_y][end_x+1] = self.board[end_y][0]
+                    self.board[end_y][0] = 0
+                else:
+                    self.board[end_y][-1].moved = True
+                    self.board[end_y][end_x-1] = self.board[end_y][-1]
+                    self.board[end_y][-1] = 0
+
+                piece.moved = True
+                self.turn = not self.turn
+
+                return True
+
         # check if piece can move to selected dest
         if not moves or not [end_x, end_y] in moves:
             return False
 
         # ensure king is not captured
-        if not self.board[end_y][end_x].__class__.__name__ == "King":
+        if not type(self.board[end_y][end_x]) == King:
             captured = self.board[end_y][end_x] # placeholder for piece taken if new game state is check
             self.board[end_y][end_x] = self.board[start_y][start_x] # move
             self.board[start_y][start_x] = 0
         else:
             return False
+
+        # prevent castling after moved
+        if type(piece) in [King, Rook]:
+            piece.moved = True
 
         # if new position is in check for move's own colour
         if PieceEngine.in_check(self.turn, self.board):
@@ -65,8 +122,8 @@ class Engine:
             self.board[end_y][end_x] = captured
             return False
 
-        # check for pawn promotions & en passant
-        if piece.__class__.__name__ == "Pawn":
+        if type(piece) == Pawn:
+            # check for en passant
             self.board[end_y][end_x].moved = True
 
             if abs(start_y - end_y) == 2:
@@ -74,6 +131,16 @@ class Engine:
 
             if not start_x == end_x:
                 self.board[start_y][end_x] = 0
+
+            # check for pawn promotion
+            if (end_y == 7 and piece.colour) or (not end_y and not piece.colour):
+                choice = handle._promotion_choice()
+                self.board[end_y][end_x] = {
+                    "Q": Queen(piece.colour),
+                    "R": Rook(piece.colour),
+                    "B": Bishop(piece.colour),
+                    "K": Knight(piece.colour),
+                }[choice]
 
         self.turn = not self.turn
         self.en_passant_eligible[self.turn] = [] # clear en passant
@@ -93,52 +160,25 @@ Moves should be input in the form:
 e.g.
     g1f3
 
-Illegal move inputs will be flagged.
+Illegal/invalid move inputs will be flagged.
 The board will be printed out after every turn.\n""")
 
     def display_board(self):
-        for p, row in enumerate(self.board[::-1]):
-            print(8-p, end=" ")
+        for p, row in enumerate(self.board if not self.turn else self.board[::-1]):
+            print(8-p if self.turn else p+1, end=" ")
 
             for piece in row:
                 if not piece:
                     print(" ", end=" ")
                 else:
                     if not piece.colour:
-                        print(piece.__class__.__name__[0].lower() if not piece.__class__.__name__ == "Knight" else "n", end=" ")
+                        print(piece.__class__.__name__[0].lower() if not type(piece) == Knight else "n", end=" ")
                     else:
-                        print(piece.__class__.__name__[0] if not piece.__class__.__name__ == "Knight" else "N", end=" ")
+                        print(piece.__class__.__name__[0] if not type(piece) == Knight else "N", end=" ")
 
             print() 
 
         print(" " + "ABCDEFGH".replace("", " "))
-
-# piece objects
-class Pawn:
-    def __init__(self, colour, direction):
-        self.colour = colour
-        self.direction = direction
-        self.moved = False
-
-class Rook:
-    def __init__(self, colour):
-        self.colour = colour
-
-class Bishop:
-    def __init__(self, colour):
-        self.colour = colour
-
-class Knight:
-    def __init__(self, colour):
-        self.colour = colour
-
-class Queen:
-    def __init__(self, colour):
-        self.colour = colour
-
-class King:
-    def __init__(self, colour):
-        self.colour = colour
 
 def generate_board(): # from white's perspective as index 0 = white
     return [ # Cols ABCDEFGH, Rows 12345678 (from index 0-8)
@@ -155,16 +195,22 @@ def generate_board(): # from white's perspective as index 0 = white
 # logic for finding moves & calculating check
 class PieceEngine:
     @classmethod
-    def in_check(cls, colour, board):
-        # find position of correct king
-        for y, row in enumerate(board):
-            for x, piece in enumerate(row):
-                if piece and piece.colour == colour and type(piece) == King:
-                    king = [x, y]
+    def in_check(cls, colour, board, king=None):
+        if king is None:
+            del king
 
-        # check for existence of king
-        if not "king" in locals():
-            raise Exception(f"{['Black', 'White'][colour]} king not on board.")
+            # find position of correct king
+            for y, row in enumerate(board):
+                for x, piece in enumerate(row):
+                    if piece and piece.colour == colour and type(piece) == King:
+                        king = [x, y]
+
+            # check for existence of king
+            if not "king" in locals():
+                raise Exception(f"{['Black', 'White'][colour]} king not on board.")
+
+        else:
+            assert all(isinstance(i, int) and 0 <= i < 8 for i in king), "Invalid square."
 
         # knight checks
         x, y = king
@@ -215,7 +261,7 @@ class PieceEngine:
             if not all(0 <= j < 8 for j in i):
                 continue
 
-            if board[i[1]][i[0]] and type(board[i[1]][i[0]]) == King:
+            if board[i[1]][i[0]] and type(board[i[1]][i[0]]) == King and not board[i[1]][i[0]].colour == colour:
                 return True
 
         # bishop/queen checks
@@ -524,9 +570,12 @@ class PieceEngine:
     @classmethod
     def get_king_moves(cls, square, board):
         x, y = square
-        colour = board[y][x].colour
+        piece = board[y][x]
+        colour = piece.colour
         moves = []
+        castle_moves = []
 
+        # standard logic
         for i in [
             [x-1, y-1],
             [x, y-1],
@@ -542,5 +591,42 @@ class PieceEngine:
 
             if not board[i[1]][i[0]] or not board[i[1]][i[0]].colour == colour:
                 moves.append(i)
+
+        # castling logic
+        if not piece.moved:
+
+            # left
+            x_left = x
+            can_castle_left = True
+
+            while x_left > 2:
+                x_left -= 1
+
+                if board[y][x_left] or cls.in_check(colour, board, [x_left, y]):
+                    can_castle_left = False
+                    break
+
+            if can_castle_left:
+                p_left = board[y][0]
                 
-        return moves
+                if p_left and type(p_left) == Rook and p_left.colour == colour:
+                    castle_moves.append([x_left, y])
+
+            # right
+            x_right = x
+            can_castle_right = True
+
+            while x_right < 6:
+                x_right += 1
+
+                if board[y][x_right] or cls.in_check(colour, board, [x_right, y]):
+                    can_castle_right = False
+                    break
+
+            if can_castle_right:
+                p_right = board[y][-1]
+
+                if p_right and type(p_right) == Rook and p_right.colour == colour:
+                    castle_moves.append([x_right, y])
+
+        return moves, castle_moves
