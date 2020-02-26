@@ -7,16 +7,6 @@ Engine ids:
 
 """
 
-"fix castling!!!!!!!!!!!!!!!!!!!!!!"
-
-# todo:
-#   castling
-#   pgn
-#   timer (+intervals)
-#   add comprehensive algebraic notation (i.e. +/-, ! etc)
-#   more helpful validation messages
-#   add comments for piece/move logic
-
 # piece objects
 class Pawn:
     def __init__(self, colour, direction):
@@ -47,7 +37,7 @@ class King:
         self.moved = False
 
 class Engine:
-    meta = "Chess"
+    meta = "Chess" # Standard variant engine
 
     def __init__(self, text=True):
         self.board = generate_board()
@@ -60,6 +50,12 @@ class Engine:
         self.en_passant_eligible = [[], []] # white eligible, black eligible
 
     def move(self, move, handle):
+        if self.stalemate():
+            return "x"
+            
+        if self.checkmate():
+            return "X"
+
         start, end = move
 
         # convert to array indices
@@ -106,8 +102,10 @@ class Engine:
 
         # ensure king is not captured
         if not type(self.board[end_y][end_x]) == King:
+
+            # perform move
             captured = self.board[end_y][end_x] # placeholder for piece taken if new game state is check
-            self.board[end_y][end_x] = self.board[start_y][start_x] # move
+            self.board[end_y][end_x] = self.board[start_y][start_x]
             self.board[start_y][start_x] = 0
         else:
             return False
@@ -123,7 +121,7 @@ class Engine:
             return False
 
         if type(piece) == Pawn:
-            # check for en passant
+            # update en passant eligibility
             self.board[end_y][end_x].moved = True
 
             if abs(start_y - end_y) == 2:
@@ -143,15 +141,69 @@ class Engine:
                 }[choice]
 
         self.turn = not self.turn
-        self.en_passant_eligible[self.turn] = [] # clear en passant
+        self.en_passant_eligible[self.turn] = [] # clear en passant for pawns after one full turn
+
+        return True
+
+    def stalemate(self):
+        for y, row in enumerate(self.board):
+            for x, piece in enumerate(row):
+                if not piece:
+                    continue
+
+                # checks if a piece is able to move
+                if PieceEngine.get_moves(piece, [x, y], self.board, self.en_passant_eligible):
+                    return False
 
         return True
 
     def checkmate(self):
-        pass
+        # if king is not in check in the first place
+        if not PieceEngine.in_check(self.turn, self.board):
+            return False
 
-    def stalemate(self):
-        pass
+        pieces = {
+            # piece: [[x, y], [movelist]]
+        }
+
+        # get a list of all possible moves
+        for y, row in enumerate(self.board):
+            for x, piece in enumerate(row):
+                if piece and piece.colour == self.turn:
+                    moves = PieceEngine.get_moves(piece, [x, y], self.board, self.en_passant_eligible)
+
+                    # filter out empty castle moves for king
+                    if type(piece) == King:
+                        moves = moves[0]
+
+                    # skip piece if they are unable to move and defend from check
+                    if not len(moves):
+                        continue
+
+                    pieces[piece] = [[x, y], moves]
+
+        for piece, data in pieces.items():
+            pos, moves = data
+
+            for m in moves:
+
+                # perform move
+                captured = self.board[m[1]][m[0]]
+                self.board[m[1]][m[0]] = self.board[pos[1]][pos[0]]
+                self.board[pos[1]][pos[0]] = 0
+
+                check = PieceEngine.in_check(self.turn, self.board)
+                
+                # undo move
+                self.board[pos[1]][pos[0]] = self.board[m[1]][m[0]]
+                self.board[m[1]][m[0]] = captured
+
+                if not check: 
+                    return False
+
+        # check cannot been evaded
+
+        return True
 
     def print_instructions(self):
         print("""\
@@ -165,7 +217,7 @@ The board will be printed out after every turn.\n""")
 
     def display_board(self):
         for p, row in enumerate(self.board if not self.turn else self.board[::-1]):
-            print(8-p if self.turn else p+1, end=" ")
+            print(8-p if self.turn else p+1, end=" ") # changes row number according to turn
 
             for piece in row:
                 if not piece:
@@ -180,8 +232,8 @@ The board will be printed out after every turn.\n""")
 
         print(" " + "ABCDEFGH".replace("", " "))
 
-def generate_board(): # from white's perspective as index 0 = white
-    return [ # Cols ABCDEFGH, Rows 12345678 (from index 0-8)
+def generate_board():
+    return [ # white at index 0
         [Rook(1), Knight(1), Bishop(1), Queen(1), King(1), Bishop(1), Knight(1), Rook(1)],
         [Pawn(1, 1) for _ in range(8)],
         [0]*8,
@@ -196,7 +248,7 @@ def generate_board(): # from white's perspective as index 0 = white
 class PieceEngine:
     @classmethod
     def in_check(cls, colour, board, king=None):
-        if king is None:
+        if king is None: # by default
             del king
 
             # find position of correct king
@@ -209,13 +261,15 @@ class PieceEngine:
             if not "king" in locals():
                 raise Exception(f"{['Black', 'White'][colour]} king not on board.")
 
-        else:
+        else: # when checking for castling squares; validation
             assert all(isinstance(i, int) and 0 <= i < 8 for i in king), "Invalid square."
 
-        # knight checks
+        ####                CHECKS FROM KNIGHT              ####
+
         x, y = king
 
-        for i in [
+        # possible relative knight moves
+        for i in [ 
             [x+1, y+2],
             [x-1, y+2],
             [x+1, y-2],
@@ -225,29 +279,35 @@ class PieceEngine:
             [x-2, y+1],
             [x-2, y-1],
         ]:
+            # bound check
             if any(not 0 <= j < 8 for j in i):
                 continue
 
             piece = board[i[1]][i[0]]
 
+            # checks if knight of opponent is checking
             if piece and not piece.colour == colour and type(piece) == Knight:
                 return True
 
-        # pawn checks
+        ####                CHECKS FROM PAWN                ####
+
         x, y = king
 
-        if colour:
-            for t in [-1, 1]: 
+        if colour: # white pawns
+            for t in [-1, 1]: # left and right
                 if x + t < 8 and y < 7 and board[y+1][x+t] and not board[y+1][x+t].colour and type(board[y+1][x+t]) == Pawn:
                     return True
-        else:
-            for t in [-1, 1]: 
+
+        else: # black pawns
+            for t in [-1, 1]: # left and right
                 if x + t < 8 and y > 0 and board[y-1][x+t] and board[y-1][x+t].colour and type(board[y-1][x+t]) == Pawn:
                     return True
 
-        # if next to king
+        ####                NEXT TO OPPONENT'S KING             ####
+
         x, y = king
 
+        # possible relative king moves
         for i in [
             [x-1, y-1],
             [x, y-1],
@@ -258,28 +318,37 @@ class PieceEngine:
             [x, y+1],
             [x+1, y+1],
         ]:
+            # bound check
             if not all(0 <= j < 8 for j in i):
                 continue
 
+            # checks if king is next to another king
+            # colour check is necessary when checking for castling availability
             if board[i[1]][i[0]] and type(board[i[1]][i[0]]) == King and not board[i[1]][i[0]].colour == colour:
                 return True
 
-        # bishop/queen checks
+        ####                CHECKS FROM BISHOP/QUEEN              ####
+
+        # north east diagonal
         x, y = king
 
         while True:
             x += 1
             y += 1
 
+            # bound check
             if x > 7 or y > 7:
                 break
             
             if board[y][x]:
+                # checks if bishop/queen of opponent is checking
+                # does not register check if piece is not an opponent bishop/queen, and breaks as line of check is broken
                 if not board[y][x].colour == colour and type(board[y][x]) in [Bishop, Queen]:
                     return True
 
                 break
 
+         # south east diagonal
         x, y = king
 
         while True:
@@ -295,6 +364,7 @@ class PieceEngine:
 
                 break
 
+        # north west diagonal
         x, y = king
 
         while True:
@@ -310,6 +380,7 @@ class PieceEngine:
 
                 break
 
+        # south west diagonal
         x, y = king
 
         while True:
@@ -325,17 +396,22 @@ class PieceEngine:
 
                 break
 
-        # rook/queen checks
-        x, y = king
-        transpose = list(map(list, zip(*board)))
+        ####                CHECKS FROM ROOK/QUEEN              ####
 
+        x, y = king
+        transpose = list(map(list, zip(*board))) # for ease of checking columns
+
+        # right
         for i in range(x+1, 8):
             if board[y][i]:
+               # checks if rook/queen of opponent is checking
+                # does not register check if piece is not an opponent rook/queen, and breaks as line of check is broken
                 if not board[y][i].colour == colour and type(board[y][i]) in [Rook, Queen]:
                     return True
 
                 break
 
+        # left
         for i in reversed(range(x)):
             if board[y][i]:
                 if not board[y][i].colour == colour and type(board[y][i]) in [Rook, Queen]:
@@ -343,13 +419,15 @@ class PieceEngine:
 
                 break
 
+        # up
         for i in range(y+1, 8):
             if transpose[x][i]:
                 if not transpose[x][i].colour == colour and type(transpose[x][i]) in [Rook, Queen]:
-                    return True7
+                    return True
 
                 break
 
+        # down
         for i in reversed(range(y)):
             if transpose[x][i]:
                 if not transpose[x][i].colour == colour and type(transpose[x][i]) in [Rook, Queen]:
@@ -357,10 +435,14 @@ class PieceEngine:
 
                 break
         
+        # no check has been registered
+
         return False
         
     @classmethod
-    def get_moves(cls, piece, square, board, en_passant=[[], []]):
+    def get_moves(cls, piece, square, board, en_passant=[[], []]): # main cls method for finding moves
+        # returns move according to piece input
+        
         if type(piece) == Rook:
             return cls.get_rook_moves(square, board)
 
@@ -537,19 +619,23 @@ class PieceEngine:
         colour = piece.colour
         moves = []
 
+        # move forwards by 1
         if not board[y + piece.direction][x]:
             moves.append([x, y + piece.direction])
         
+        # move forwards by 2 if piece is not moved
         if not piece.moved and not board[y + (2*piece.direction)][x]:
             moves.append([x, y + (2*piece.direction)])
 
+        # take piece left
         if x > 0 and board[y + piece.direction][x-1] and not board[y + piece.direction][x-1].colour == colour:
             moves.append([x-1, y + piece.direction])
 
+        # take piece right
         if x < 7 and board[y + piece.direction][x+1] and not board[y + piece.direction][x+1].colour == colour:
             moves.append([x+1, y + piece.direction])
 
-        # en passant
+        # check if there are available pawns to perform en passant
         if x < 7:
             right = board[y][x+1]
 
@@ -575,7 +661,6 @@ class PieceEngine:
         moves = []
         castle_moves = []
 
-        # standard logic
         for i in [
             [x-1, y-1],
             [x, y-1],
@@ -595,10 +680,11 @@ class PieceEngine:
         # castling logic
         if not piece.moved:
 
-            # left
+            # left side castle
             x_left = x
             can_castle_left = True
 
+            # checks if squares are empty and not under check
             while x_left > 2:
                 x_left -= 1
 
@@ -606,16 +692,18 @@ class PieceEngine:
                     can_castle_left = False
                     break
 
+            # if above is met, checks if end rook is present and unmoved
             if can_castle_left:
                 p_left = board[y][0]
                 
                 if p_left and type(p_left) == Rook and p_left.colour == colour:
                     castle_moves.append([x_left, y])
 
-            # right
+            # right side castle
             x_right = x
             can_castle_right = True
 
+            # checks if squares are empty and not under check
             while x_right < 6:
                 x_right += 1
 
@@ -623,10 +711,11 @@ class PieceEngine:
                     can_castle_right = False
                     break
 
+            # if above is met, checks if end rook is present and unmoved
             if can_castle_right:
                 p_right = board[y][-1]
 
                 if p_right and type(p_right) == Rook and p_right.colour == colour:
                     castle_moves.append([x_right, y])
-
+                
         return moves, castle_moves
