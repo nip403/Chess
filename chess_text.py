@@ -1,11 +1,6 @@
 from chess.engine import ChessText
-import os
 
 def main():
-    #game = GraphicsEngine(Chess(text=False), [800, 800])
-    #game.play()
-
-    #""" text based game:
     game = ChessText()
 
     while True:
@@ -14,7 +9,8 @@ def main():
         if msg is not None:
             print(msg)
 
-    #"""
+            if msg in ["Checkmate", "Stalemate"]:
+                break
 
 if __name__ == "__main__":
     main()
