@@ -39,13 +39,9 @@ class King:
 class Engine:
     meta = "Chess" # Standard variant engine
 
-    def __init__(self, text=True):
+    def __init__(self):
         self.board = generate_board()
-        self.turn = True # white = 1, black = 0
-
-        if text:
-            self.print_instructions()
-            self.display_board()
+        self.turn = True # white = 1, black = 0    
 
         self.en_passant_eligible = [[], []] # white eligible, black eligible
 
@@ -96,6 +92,9 @@ class Engine:
 
                 return True
 
+        elif type(piece) == Pawn:
+            moves, ep_moves = moves
+
         # check if piece can move to selected dest
         if not moves or not [end_x, end_y] in moves:
             return False
@@ -121,13 +120,15 @@ class Engine:
             return False
 
         if type(piece) == Pawn:
+
             # update en passant eligibility
             self.board[end_y][end_x].moved = True
 
             if abs(start_y - end_y) == 2:
                 self.en_passant_eligible[self.turn].append([end_x, end_y])
 
-            if not start_x == end_x:
+            # perform en_passant
+            if not start_x == end_x and [end_x, end_y] in ep_moves:
                 self.board[start_y][end_x] = 0
 
             # check for pawn promotion
@@ -204,33 +205,6 @@ class Engine:
         # check cannot been evaded
 
         return True
-
-    def print_instructions(self):
-        print("""\
-Moves should be input in the form:
-    [Start Square][End Square]
-e.g.
-    g1f3
-
-Illegal/invalid move inputs will be flagged.
-The board will be printed out after every turn.\n""")
-
-    def display_board(self):
-        for p, row in enumerate(self.board if not self.turn else self.board[::-1]):
-            print(8-p if self.turn else p+1, end=" ") # changes row number according to turn
-
-            for piece in row:
-                if not piece:
-                    print(" ", end=" ")
-                else:
-                    if not piece.colour:
-                        print(piece.__class__.__name__[0].lower() if not type(piece) == Knight else "n", end=" ")
-                    else:
-                        print(piece.__class__.__name__[0] if not type(piece) == Knight else "N", end=" ")
-
-            print() 
-
-        print(" " + "ABCDEFGH".replace("", " "))
 
 def generate_board():
     return [ # white at index 0
@@ -618,6 +592,7 @@ class PieceEngine:
         piece = board[y][x]
         colour = piece.colour
         moves = []
+        en_passant_moves = []
 
         # move forwards by 1
         if not board[y + piece.direction][x]:
@@ -641,7 +616,7 @@ class PieceEngine:
 
             if right and type(right) == Pawn and not right.colour == colour and [x+1, y] in en_passant[right.colour]:
                 if (y == 4 and colour) or (y == 3 and not colour):
-                    moves.append([x+1, y + piece.direction])
+                    en_passant_moves.append([x+1, y + piece.direction])
 
         if x > 0:
             left = board[y][x-1]
@@ -649,9 +624,9 @@ class PieceEngine:
             if left and type(left) == Pawn and not left.colour == colour and [x-1, y] in en_passant[left.colour]:
                 if (y == 4 and colour) or (y == 3 and not colour):
                     
-                    moves.append([x-1, y + piece.direction])
+                    en_passant_moves.append([x-1, y + piece.direction])
 
-        return moves
+        return moves, en_passant_moves
 
     @classmethod
     def get_king_moves(cls, square, board):
