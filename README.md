@@ -1,6 +1,18 @@
 # Chess
 A Python 3.7 chess library.
 
+# Known bugs:
+1. e2e4
+e7e5
+b2b3
+g8f6
+d2d3
+b8c6
+h2h4
+d7d5
+g1h3
+d5e4
+
 # Todo
 ### Short term
 - finish graphics engine
