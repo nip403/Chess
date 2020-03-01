@@ -4,37 +4,7 @@ import sys
 """
 Engine ids:
     0 - Standard variant
-
 """
-
-# piece objects
-class Pawn:
-    def __init__(self, colour, direction):
-        self.colour = colour
-        self.direction = direction
-        self.moved = False
-
-class Rook:
-    def __init__(self, colour):
-        self.colour = colour
-        self.moved = False
-
-class Bishop:
-    def __init__(self, colour):
-        self.colour = colour
-
-class Knight:
-    def __init__(self, colour):
-        self.colour = colour
-
-class Queen:
-    def __init__(self, colour):
-        self.colour = colour
-
-class King:
-    def __init__(self, colour):
-        self.colour = colour
-        self.moved = False
 
 class Engine:
     meta = "Chess" # Standard variant engine
@@ -46,11 +16,9 @@ class Engine:
         self.en_passant_eligible = [[], []] # white eligible, black eligible
 
     def move(self, move, handle):
-        if self.stalemate():
-            return "x"
-            
-        if self.checkmate():
-            return "X"
+        # N.B. return values from this function goes as follows:
+            # False (invalid/illegal move), error_msg
+            # True, additional_pgn_info
 
         start, end = move
 
@@ -63,9 +31,13 @@ class Engine:
         
         piece = self.board[start_y][start_x]
 
-        # validate piece and turn
-        if not piece or not self.turn == piece.colour:
-            return False
+        # validate piece
+        if not piece:
+            return False, "Empty piece."
+
+        # validate turn
+        if not self.turn == piece.colour:
+            return False, "Piece has incorrect colour."
 
         # get available moves
         moves = PieceEngine.get_moves(piece, [start_x, start_y], self.board, self.en_passant_eligible)
@@ -88,26 +60,24 @@ class Engine:
                     self.board[end_y][-1] = 0
 
                 piece.moved = True
-                self.turn = not self.turn
+                self._new_turn()
 
-                return True
+                return True, "O-O" if piece.colour and start_x == 4 else "O-O-O"
 
         elif type(piece) == Pawn:
             moves, ep_moves = moves
 
         # check if piece can move to selected dest
         if not moves or not [end_x, end_y] in moves:
-            return False
+            return False, f"Piece cannot move to {move[-2:]}."
 
         # ensure king is not captured
-        if not type(self.board[end_y][end_x]) == King:
-
-            # perform move
+        if not type(self.board[end_y][end_x]) == King: # perform move
             captured = self.board[end_y][end_x] # placeholder for piece taken if new game state is check
             self.board[end_y][end_x] = self.board[start_y][start_x]
             self.board[start_y][start_x] = 0
         else:
-            return False
+            return False, "Cannot capture king."
 
         # prevent castling after moved
         if type(piece) in [King, Rook]:
@@ -117,7 +87,8 @@ class Engine:
         if PieceEngine.in_check(self.turn, self.board):
             self.board[start_y][start_x] = self.board[end_y][end_x] # swap back
             self.board[end_y][end_x] = captured
-            return False
+
+            return False, "Destination square will result in check."
 
         if type(piece) == Pawn:
 
@@ -129,11 +100,20 @@ class Engine:
 
             # perform en_passant
             if not start_x == end_x and [end_x, end_y] in ep_moves:
+                captured_ep = self.board[start_y][end_x] 
                 self.board[start_y][end_x] = 0
+
+                if PieceEngine.in_check(self.turn, self.board): # check if capturing en passant exposes discovery check
+                    self.board[start_y][start_x] = self.board[end_y][end_x]
+                    self.board[start_y][end_x] = captured_ep
+
+                    return False, "En passant results in check."
 
             # check for pawn promotion
             if (end_y == 7 and piece.colour) or (not end_y and not piece.colour):
                 choice = handle._promotion_choice()
+                self._new_turn()
+
                 self.board[end_y][end_x] = {
                     "Q": Queen(piece.colour),
                     "R": Rook(piece.colour),
@@ -141,12 +121,29 @@ class Engine:
                     "K": Knight(piece.colour),
                 }[choice]
 
-        self.turn = not self.turn
-        self.en_passant_eligible[self.turn] = [] # clear en passant for pawns after one full turn
+                return True, "=" + choice
 
-        return True
+        self._new_turn()
+
+        return True, ""
+
+    def build_from_localpgn(self, pgn): #///////////fix
+        self.__init__() # N.B. will lose current en passant/checking data
+
+        for i in pgn:
+            sx = "ABCDEFGH".index(start[0])
+            sy = int(start[1]) - 1
+
+            ex = "ABCDEFGH".index(end[0])
+            ey = int(end[1]) - 1
+        
+            piece = self.board[sy][sx]
+
+            self.board[ey][ex] = self.board[sy][sx]
+            self.board[sy][sx] = 0
 
     def stalemate(self):
+        # add 50 move repetition, cases of stalemate (e.g. king and king, king w/ bishop/knight and king, etc.)
         for y, row in enumerate(self.board):
             for x, piece in enumerate(row):
                 if not piece:
@@ -205,6 +202,10 @@ class Engine:
         # check cannot been evaded
 
         return True
+
+    def _new_turn(self):
+        self.turn = not self.turn
+        self.en_passant_eligible[self.turn] = [] # clear en passant for pawns after one full turn
 
 def generate_board():
     return [ # white at index 0
@@ -656,13 +657,10 @@ class PieceEngine:
         if not piece.moved:
 
             # left side castle
-            x_left = x
             can_castle_left = True
 
             # checks if squares are empty and not under check
-            while x_left > 2:
-                x_left -= 1
-
+            for x_left in reversed(range(x-2, x)):
                 if board[y][x_left] or cls.in_check(colour, board, [x_left, y]):
                     can_castle_left = False
                     break
@@ -675,13 +673,10 @@ class PieceEngine:
                     castle_moves.append([x_left, y])
 
             # right side castle
-            x_right = x
             can_castle_right = True
 
             # checks if squares are empty and not under check
-            while x_right < 6:
-                x_right += 1
-
+            for x_right in range(x+1, x+3):
                 if board[y][x_right] or cls.in_check(colour, board, [x_right, y]):
                     can_castle_right = False
                     break
@@ -694,3 +689,32 @@ class PieceEngine:
                     castle_moves.append([x_right, y])
                 
         return moves, castle_moves
+
+# piece objects
+class Pawn:
+    def __init__(self, colour, direction):
+        self.colour = colour
+        self.direction = direction
+        self.moved = False
+
+class Rook:
+    def __init__(self, colour):
+        self.colour = colour
+        self.moved = False
+
+class Bishop:
+    def __init__(self, colour):
+        self.colour = colour
+
+class Knight:
+    def __init__(self, colour):
+        self.colour = colour
+
+class Queen:
+    def __init__(self, colour):
+        self.colour = colour
+
+class King:
+    def __init__(self, colour):
+        self.colour = colour
+        self.moved = False
