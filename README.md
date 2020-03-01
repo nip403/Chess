@@ -18,7 +18,6 @@ A Python 3.7 chess library.
 - algebraic notation & other notation
   - conversion from input to standard notation
   - comprehensive notation i.e. +/-, !, ? etc
-- exact error messages -> diagnose exact nature of illegal/invalid move
 
 ### Long term
 - enable multiplayer using sockets/podsixnet
