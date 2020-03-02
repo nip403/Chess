@@ -238,7 +238,8 @@ class ChessText(_chess):
             if not self._validate_local_pgn(data): # update to walrus := 
                 return "Invalid input localPGN."
 
-            #self.engine.build_from_localpgn(data) # fix pgn!!! - doesn't register castling/en passant
+            self.engine.build_from_localpgn(data)
+            self.display_board()
 
             return
 
@@ -278,7 +279,24 @@ class ChessText(_chess):
         self.display_board()
 
     def _validate_local_pgn(self, pgns):
-        return not any(not len(i) == 4 or not (i[1]+i[3]).isdecimal() or not 0 <= int(i[1]) < 8 or not 0 <= int(i[3]) < 8 or not all(65 <= ord(j) <= 72 for j in i[::2]) for i in pgns) #add optional validate option for engine.move
+        for i in pgns:
+            if "-" in i and (not len(i.split("-") in [2, 3]) or not "O" in i):
+                return False
+
+            else:
+                if not (i[1]+i[3]).isdecimal() or not 0 <= int(i[1]) < 8 or not 0 <= int(i[3]) < 8 or not all(65 <= ord(j) <= 72 for j in i[::2]):
+                    return False
+
+                if not len(i) in [4, 6, 8]:
+                    return False
+
+                if len(i) == 6 and (not i[-2] == "=" or not i[-1] in "QBRK"):
+                        return False
+
+                elif len(i) == 8 and not i[4:] == "e.p.":
+                    return False
+
+        return True
 
     def _promotion_choice(self):
         while True:
