@@ -22,8 +22,8 @@ getlocalpgn     - Outputs raw move list (in the input format for importlocalpgn)
 *importpgn      - Input PGN for existing game
 importlocalpgn  - Input raw move list for existing game
 
-*fen            - Output copmlete FEN
-*fenboard       - Outputs only FEN info which describes board
+fen            - Output copmlete FEN
+fenboard       - Outputs only FEN info which describes board
 
 *inputfen       - Input copmlete FEN for existing game
 
@@ -243,6 +243,12 @@ class ChessText(_chess):
 
             return
 
+        elif move == "FEN":
+            return self.fen()
+
+        elif move == "FENBOARD":
+            return self.fenboard()
+
         if not legal:
             return "Invalid move, re-enter."
 
@@ -306,22 +312,53 @@ class ChessText(_chess):
                 return choice
 
     def _parse_input(self, move): # validation
-        if not len(move) == 4 or move[:2] == move[-2:]:
+        if not len(move) == 4 or move[:2] == move[-2:]: # length check or if destination square = start square
             return False, None
 
         letters = [move[0], move[2]]
         nums = [move[1], move[3]]
 
-        if not all(64 < ord(m) < 73 for m in letters):
+        if not all(64 < ord(m) < 73 for m in letters): # checks A-H
             return False, None
 
-        if not all(n.isdigit() and 0 < int(n) < 9 for n in nums):
+        if not all(n.isdigit() and 0 < int(n) < 9 for n in nums): # checks num within range 
             return False, None
 
         return True, [move[:2], move[2:]]
 
-    #@property
-    #def FEN
+    def fenboard(self): # displays only main block & move for fen
+        fen = ""
+
+        for row in self.engine.board[::-1]: # fen is from white's perspective
+            numzeros = 0
+
+            for piece in row:
+                if not piece:
+                    numzeros += 1
+                
+                else:
+                    if numzeros:
+                        fen += str(numzeros)
+
+                    name = piece.__class__.__name__
+
+                    if name == "Knight":
+                        name = "N"
+
+                    fen += name[0] if piece.colour else name[0].lower()
+                    numzeros = 0
+
+            if numzeros:
+                fen += str(numzeros)
+
+            fen += "/"
+
+        return fen + f" {'w' if self.engine.turn else 'b'}"
+
+    def fen(self):
+        fen = ""
+
+        return self.fenboard() + fen
 
     def _convert_pgn(self, move, tmp):
         start, end = move
