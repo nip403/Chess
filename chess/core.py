@@ -109,6 +109,10 @@ class Engine:
 
                     return False, "En passant results in check."
 
+                self._new_turn()
+                
+                return True, "e.p."
+
             # check for pawn promotion
             if (end_y == 7 and piece.colour) or (not end_y and not piece.colour):
                 choice = handle._promotion_choice()
@@ -127,20 +131,54 @@ class Engine:
 
         return True, ""
 
-    def build_from_localpgn(self, pgn): #///////////fix
-        self.__init__() # N.B. will lose current en passant/checking data
+    def build_from_localpgn(self, pgn):
+        self.__init__() 
 
         for i in pgn:
-            sx = "ABCDEFGH".index(start[0])
-            sy = int(start[1]) - 1
+            # check for castling
+            print(i)
+            if "-" in i:
+                i = i.split("-")
+                y = int(not self.turn) * 7 # white at index 0
+                king = self.board[y][4]
 
-            ex = "ABCDEFGH".index(end[0])
-            ey = int(end[1]) - 1
-        
-            piece = self.board[sy][sx]
+                if len(i) == 3: # queenside
+                    self.board[y][2] = king
+                    self.board[y][3] = self.board[y][0]
+                    self.board[y][4] = 0
+                    self.board[y][0] = 0
 
-            self.board[ey][ex] = self.board[sy][sx]
-            self.board[sy][sx] = 0
+                else: # kingside
+                    self.board[y][6] = king
+                    self.board[y][5] = self.board[y][-1]
+                    self.board[y][4] = 0
+                    self.board[y][-1] = 0
+                    
+            start_x = "ABCDEFGH".index(i[0])
+            start_y = int(i[1]) - 1
+
+            end_x = "ABCDEFGH".index(i[2])
+            end_y = int(i[3]) - 1
+
+            # perform move
+            piece = self.board[start_y][start_x]
+            self.board[end_y][end_x] = piece
+            self.board[start_y][start_x] = 0
+
+            # check for en passant
+            if "e.p." in i:
+                self.board[end_x][start_y] = 0
+
+            # check for promotion
+            if "=" in i:
+                self.board[end_y][end_x] = {
+                    "Q": Queen(self.board[end_y][end_x].colour),
+                    "R": Rook(self.board[end_y][end_x].colour),
+                    "B": Bishop(self.board[end_y][end_x].colour),
+                    "K": Knight(self.board[end_y][end_x].colour),
+                }[i[-1]]
+
+            self.turn = not self.turn
 
     def stalemate(self):
         # add 50 move repetition, cases of stalemate (e.g. king and king, king w/ bishop/knight and king, etc.)
