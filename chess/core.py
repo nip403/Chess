@@ -14,6 +14,8 @@ class Engine:
         self.turn = True # white = 1, black = 0    
 
         self.en_passant_eligible = [[], []] # white eligible, black eligible
+        self.halfmove = 0
+        self.fullmove = 0
 
     def move(self, move, handle):
         # N.B. return values from this function goes as follows:
@@ -21,6 +23,7 @@ class Engine:
             # True, additional_pgn_info
 
         start, end = move
+        halfmove_updated = False
 
         # convert to array indices
         start_x = "ABCDEFGH".index(start[0])
@@ -76,6 +79,15 @@ class Engine:
             captured = self.board[end_y][end_x] # placeholder for piece taken if new game state is check
             self.board[end_y][end_x] = self.board[start_y][start_x]
             self.board[start_y][start_x] = 0
+
+            if not halfmove_updated:
+                halfmove_updated = True
+                old_halfmove = self.halfmove
+
+                if not captured or not type(self.board[end_y][end_x]) == Pawn:
+                    self.halfmove += 1
+                else:
+                    self.halfmove = 0
         else:
             return False, "Cannot capture king."
 
@@ -87,6 +99,9 @@ class Engine:
         if PieceEngine.in_check(self.turn, self.board):
             self.board[start_y][start_x] = self.board[end_y][end_x] # swap back
             self.board[end_y][end_x] = captured
+
+            if halfmove_updated:
+                self.halfmove = old_halfmove
 
             return False, "Destination square will result in check."
 
@@ -132,27 +147,29 @@ class Engine:
         return True, ""
 
     def build_from_localpgn(self, pgn):
-        self.__init__() 
+        self.__init__()
 
         for i in pgn:
             # check for castling
-            print(i)
             if "-" in i:
                 i = i.split("-")
                 y = int(not self.turn) * 7 # white at index 0
                 king = self.board[y][4]
+                king.moved = True
 
                 if len(i) == 3: # queenside
                     self.board[y][2] = king
                     self.board[y][3] = self.board[y][0]
                     self.board[y][4] = 0
                     self.board[y][0] = 0
+                    self.board[y][3].moved = True
 
                 else: # kingside
                     self.board[y][6] = king
                     self.board[y][5] = self.board[y][-1]
                     self.board[y][4] = 0
                     self.board[y][-1] = 0
+                    self.board[y][5].moved = True
                     
             start_x = "ABCDEFGH".index(i[0])
             start_y = int(i[1]) - 1
@@ -162,12 +179,27 @@ class Engine:
 
             # perform move
             piece = self.board[start_y][start_x]
+            captured = self.board[end_y][end_x]
             self.board[end_y][end_x] = piece
             self.board[start_y][start_x] = 0
 
-            # check for en passant
+             # check for en passant
             if "e.p." in i:
                 self.board[end_x][start_y] = 0
+
+            # update en passant
+            if type(self.board[end_y][end_x]) == Pawn and abs(start_y - end_y) == 2:
+                self.en_passant_eligible[self.turn].append([end_x, end_y])
+                piece.moved = True
+                self.halfmove = 0
+            else:
+                if captured:
+                    self.halfmove = 0
+                else:
+                    self.halfmove += 1
+                
+            if type(piece) == Rook:
+                piece.moved = True
 
             # check for promotion
             if "=" in i:
@@ -178,7 +210,7 @@ class Engine:
                     "K": Knight(self.board[end_y][end_x].colour),
                 }[i[-1]]
 
-            self.turn = not self.turn
+            self._new_turn()
 
     def stalemate(self):
         # add 50 move repetition, cases of stalemate (e.g. king and king, king w/ bishop/knight and king, etc.)
@@ -242,6 +274,9 @@ class Engine:
         return True
 
     def _new_turn(self):
+        if not self.turn:
+            self.fullmove += 1
+
         self.turn = not self.turn
         self.en_passant_eligible[self.turn] = [] # clear en passant for pawns after one full turn
 
