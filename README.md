@@ -7,12 +7,15 @@ A Python 3.7 chess library.
 ### Short term
 - finish graphics engine
 - add usage, requirements
-- PGN/FEN generator
-  - allow (complete) FEN input to update game
+
+- change en passant system to show only 1 code at a time, as only 1 pawn can be en passant eligible in a game
+- need to test halfmove, fullmove, build from pgn and fen generator
+
 - timer (+ intervals)
   - create graphics banner
-- cmd line integration, refreshing cmd line each move (os.system("cls))
-  - timer
+  - timer in cmd line
+- refreshing cmd line
+  
 - titlescreen
 - algebraic notation & other notation
   - conversion from input to standard notation
