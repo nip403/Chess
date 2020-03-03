@@ -356,9 +356,51 @@ class ChessText(_chess):
         return fen + f" {'w' if self.engine.turn else 'b'}"
 
     def fen(self):
-        fen = ""
+        fen = " "
 
-        return self.fenboard() + fen
+        wk = self.engine.board[0][4]
+        bk = self.engine.board[-1][4]
+
+        if wk and wk.__class__.__name__ == "King" and wk.colour:
+            # white king castle kingside
+            right_rook = self.engine.board[0][-1]
+            between = self.engine.board[0][5:-1]
+
+            if not any(between) and right_rook and right_rook.__class__.__name__ == "Rook" and right_rook.colour:
+                fen += "K"
+
+            # white king castle queenside
+            left_rook = self.engine.board[0][0]
+            between = self.engine.board[0][1:4]
+
+            if not any(between) and left_rook and left_rook.__class__.__name__ == "Rook" and left_rook.colour:
+                fen += "Q"
+
+        if bk and bk.__class__.__name__ == "King" and not wk.colour:
+            # black king castle kingside
+            right_rook = self.engine.board[-1][-1]
+            between = self.engine.board[-1][5:-1]
+
+            if not any(between) and right_rook and right_rook.__class__.__name__ == "Rook" and not right_rook.colour:
+                fen += "k"
+
+            # white king castle queenside
+            left_rook = self.engine.board[-1][0]
+            between = self.engine.board[-1][1:4]
+
+            if not any(between) and left_rook and left_rook.__class__.__name__ == "Rook" and not left_rook.colour:
+                fen += "q"
+
+        fen += " "
+
+        # en passant
+        for i in self.engine.en_passant_eligible:
+            for j in i:
+                letter = list("abcdefgh")[j[0]]
+                number = str(j[1] + 1)
+                fen += letter + number
+
+        return self.fenboard() + fen + f" {self.engine.halfmove} {self.engine.fullmove}"
 
     def _convert_pgn(self, move, tmp):
         start, end = move
