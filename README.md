@@ -1,12 +1,10 @@
 # Chess
 A Python 3.7 chess library.
 
-# Known bugs
-
 # Todo
 ### Short term
 - finish graphics engine
-- add usage, requirements
+- add usage, requirements, features header
 
 - change en passant system to show only 1 code at a time, as only 1 pawn can be en passant eligible in a game
 - need to test halfmove, fullmove, build from pgn and fen generator
