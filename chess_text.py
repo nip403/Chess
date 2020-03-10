@@ -9,7 +9,7 @@ def main():
         if msg is not None:
             print(msg)
 
-            if msg in ["Checkmate", "Stalemate"]:
+            if msg[-4:] == "mate":
                 break
 
 if __name__ == "__main__":
