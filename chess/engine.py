@@ -7,7 +7,6 @@ import os
 #TODO download chess font file for text engine
 
 """
-
 INPUT COMMANDS (non case sensitive)
 
 exit            - Exits 
@@ -87,17 +86,6 @@ class Chess(_chess):
         super().__init__(engineid)
         self._init_graphics(dimensions)
 
-    def move(self, *move):
-        notation, coords = move
-        print(notation, coords)
-
-        #while True:
-         #   self.move_event_listener()
-
-
-    def move_event_listener(self):
-        pass
-
     def play(self):
         self.draw()
 
@@ -105,18 +93,51 @@ class Chess(_chess):
             if self.main_event_listener():
                 self.draw()
 
-    def draw(self):
+    def move(self, *move):
+        notation, selected = move
+        piece = self.engine.board[selected[1]][selected[0]]
+        print(selected, piece)
+        if piece is None:
+            return
+
+        moves, flags = self.engine.get_moves(selected, piece)
+        self.draw(moves)
+
+        while True:
+            coords = self.move_event_listener()
+
+            if coords is not None:
+                coords = self._parse_coords(coords)[1]
+
+                if coords in moves:
+                    self.engine.board[coords[1]][coords[0]] = piece
+                    self.engine.board[selected[1]][selected[0]] = 0
+
+            """
+            onclick:
+                if click in movelist, move
+                if click is new piece, show new moves (try not to use recursion)
+                if not in movelist, return to main loop
+                if original piece, return to main loop
+            """
+
+    def draw(self, squares=[]):
         for x in range(8):
             for y in range(8):
-                pygame.draw.rect(self.surf, [238, 220, 180] if ((not x % 2 and not y % 2) or (x % 2 and y % 2)) else [180, 135, 100], [x * self.l, y * self.l, self.l, self.l], 0)
-                
-                piece = self.engine.board[7-y if self.engine.turn else y][x if self.engine.turn else 7-x]
+                translated = [x if self.engine.turn else 7-x, 7-y if self.engine.turn else y]
+                colour = [238, 220, 180] if ((not x % 2 and not y % 2) or (x % 2 and y % 2)) else [180, 135, 100]
+
+                pygame.draw.rect(self.surf, colour, [x * self.l, y * self.l, self.l, self.l], 0)
+                piece = self.engine.board[translated[1]][translated[0]]
                 
                 if not piece:
                     continue
 
                 icon = self.img[piece.colour][piece.__class__.__name__.capitalize()]
                 self.surf.blit(icon, icon.get_rect(center=[x * self.l + (self.l/2), y * self.l + (self.l/2)]))
+
+                if translated in squares:############
+                    pygame.draw.circle(self.surf, (0,0,0), [int((x + 0.5) * self.l), int((y + 0.5) * self.l)], self.l//2, 2)
 
         for p, i in enumerate(self.letters if self.engine.turn else self.letters[::-1]):
             self.surf.blit(i, i.get_rect(center=[p * self.l + (9*self.l/10), self.s[1] - self.l/8]))
@@ -136,12 +157,18 @@ class Chess(_chess):
                 self.move(*self._parse_coords(pygame.mouse.get_pos()))
                 return True
 
-    #move event listener
+    def move_event_listener(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                return pygame.mouse.get_pos()
 
     def _parse_coords(self, mouse):
         mouse = list(map(lambda i: int(i/self.l), mouse))
         key = sorted("A B C D E F G H".split(), reverse=not self.engine.turn)
-        print([i[self.engine.turn] for i in [[7 - mouse[0], mouse[0]], [7 - mouse[1], mouse[1]]]])
 
         return key[mouse[0]] + str(8 - mouse[1] if self.engine.turn else mouse[1] + 1), [i[self.engine.turn] for i in [[7 - mouse[0], mouse[0]], [mouse[1], 7 - mouse[1]]]]
 
@@ -196,7 +223,7 @@ class ChessText(_chess):
             return "1-0 Checkmate" if not self.engine.turn else "0-1 Checkmate" # checkmate only registers on opponent's turn
 
         elif self.engine.stalemate():
-            return "1/2-1/2 Stalemate"
+            return "½-½ Stalemate" # ½ UTF-8 189
 
         # input move, validate and parse
         move = input(f"\n{['Black', 'White'][self.engine.turn]}'s move: ").upper()
