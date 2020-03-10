@@ -16,6 +16,15 @@ class Engine:
         self.en_passant_eligible = [[], []] # white eligible, black eligible
         self.halfmove = 0
         self.fullmove = 0
+        self.fens = {} # for threefold repetition
+
+    def get_moves(self, square, piece=None):
+        if piece is None:
+            piece = self.board[square[1]][square[0]]
+
+        moves = PieceEngine.get_moves(piece, square, self.board, self.en_passant_eligible)
+
+        return moves, []
 
     def move(self, move, handle):
         # N.B. return values from this function goes as follows:
@@ -36,7 +45,7 @@ class Engine:
 
         # validate piece
         if not piece:
-            return False, "Empty piece."
+            return False, "Empty square."
 
         # validate turn
         if not self.turn == piece.colour:
@@ -64,6 +73,7 @@ class Engine:
 
                 piece.moved = True
                 self._new_turn()
+                self.fens = {} # threefold repetition cleared after castle
 
                 return True, "O-O" if piece.colour and start_x == 4 else "O-O-O"
 
@@ -72,7 +82,7 @@ class Engine:
 
         # check if piece can move to selected dest
         if not moves or not [end_x, end_y] in moves:
-            return False, f"Piece cannot move to {move[-2:]}."
+            return False, f"{piece.__class__.__name__} cannot move to {move[-2:][-1]}."
 
         # ensure king is not captured
         if not type(self.board[end_y][end_x]) == King: # perform move
@@ -105,10 +115,14 @@ class Engine:
 
             return False, "Destination square will result in check."
 
+        elif captured:
+            self.fens = {} # threefold repetition cleared after succesful capture
+
         if type(piece) == Pawn:
 
             # update en passant eligibility
             self.board[end_y][end_x].moved = True
+            self.fens = {} # threefold repetition cleared after en passant
 
             if abs(start_y - end_y) == 2:
                 self.en_passant_eligible[self.turn].append([end_x, end_y])
@@ -140,13 +154,15 @@ class Engine:
                     "K": Knight(piece.colour),
                 }[choice]
 
+                self.fens = {} # threefold repetition cleared after promotion
+
                 return True, "=" + choice
 
-        self._new_turn()
+        self._new_turn(handle if not type(piece) == Pawn else None) # if pawn moves board cannot be repeated
 
         return True, ""
 
-    def build_from_localpgn(self, pgn):
+    def build_from_localpgn(self, pgn): # add threefold repetition
         self.__init__()
 
         for i in pgn:
@@ -213,17 +229,39 @@ class Engine:
             self._new_turn()
 
     def stalemate(self):
-        # add 50 move repetition, cases of stalemate (e.g. king and king, king w/ bishop/knight and king, etc.)
+        white = []
+        black = []
+
+        if self.halfmove >= 50:
+            return True
+
+        if any(count >= 3 for count in self.fens.values()):
+            return True
+
+        # ases of stalemate (e.g. king and king, king w/ bishop/knight and king, etc.)
         for y, row in enumerate(self.board):
             for x, piece in enumerate(row):
                 if not piece:
                     continue
 
+                (white if piece.colour else black).append(piece.__class__.__name__[0] if not type(piece) == Knight else "N")
+
                 # checks if a piece is able to move
                 if PieceEngine.get_moves(piece, [x, y], self.board, self.en_passant_eligible):
                     return False
 
-        return True
+        if any(i in white + black for i in "QR"):
+            return False
+
+        if len(white + black) == 2: # 2 kings on board
+            return True
+
+        # N.B. it is not possible to checkmate if one side has 2 bishops of the same colour, but that is not factored into this
+        for s in [[white, black], [black, white]]:
+            if len(s[0]) == 1 and len(s[1]) == 2 and "N" in s[1] or "B" in s[1]:
+                return True
+
+        return False
 
     def checkmate(self):
         # if king is not in check in the first place
@@ -273,12 +311,18 @@ class Engine:
 
         return True
 
-    def _new_turn(self):
+    def _new_turn(self, handle=None):
         if not self.turn:
             self.fullmove += 1
 
         self.turn = not self.turn
         self.en_passant_eligible[self.turn] = [] # clear en passant for pawns after one full turn
+
+        if handle is not None:
+            if handle.fenboard()[:-1] in self.fens.keys():
+                self.fens[handle.fenboard()[:-1]] += 1 # update threefold repetition counter
+            else:
+                self.fens[handle.fenboard()[:-1]] = 1
 
 def generate_board():
     return [ # white at index 0
