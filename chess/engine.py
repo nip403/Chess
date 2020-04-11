@@ -7,6 +7,7 @@ import os
 #TODO download chess font file for text engine
 
 """
+
 INPUT COMMANDS (non case sensitive)
 
 exit            - Exits 
@@ -93,14 +94,18 @@ class Chess(_chess):
             if self.main_event_listener():
                 self.draw()
 
-    def move(self, *move):
+    def move(self, *move): # do a check for correct turn ###########TODO incomplete
         notation, selected = move
         piece = self.engine.board[selected[1]][selected[0]]
-        print(selected, piece)
+
         if piece is None:
             return
 
-        moves, flags = self.engine.get_moves(selected, piece)
+        moves, castle, ep = self.engine.get_moves(selected, piece)
+
+        if len(moves) == 2 and isinstance(moves, tuple): # func "get pawn moves" returns [moves], [en passant]
+            moves = moves[0] + moves[1]
+        
         self.draw(moves)
 
         while True:
@@ -108,20 +113,38 @@ class Chess(_chess):
 
             if coords is not None:
                 coords = self._parse_coords(coords)[1]
+                dest = self.engine.board[coords[1]][coords[0]]
 
-                if coords in moves:
-                    self.engine.board[coords[1]][coords[0]] = piece
-                    self.engine.board[selected[1]][selected[0]] = 0
+                if dest == piece:
+                    return
+
+                elif coords in moves:
+                    self.engine.move_without_validation(coords, selected)
+                    return
+
+                elif dest and dest.colour == piece.colour:
+                    notation, selected = self._parse_coords(pygame.mouse.get_pos())
+                    piece = dest
+                    moves, castle, ep = self.engine.get_moves(selected, dest)
+                    
+                    if len(moves) == 2 and isinstance(moves, tuple): # func "get pawn moves" returns [moves], [en passant]
+                        moves = moves[0] + moves[1]
+
+                    self.draw(moves)
+
+                else: # hopefully i caught every case and this means coords is empty square which is not a move
+                    return
 
             """
             onclick:
                 if click in movelist, move
-                if click is new piece, show new moves (try not to use recursion)
+                if click is new piece, show new moves
                 if not in movelist, return to main loop
-                if original piece, return to main loop
+                if original piece or empty, return to main loop
             """
 
     def draw(self, squares=[]):
+        print("squares", squares)
         for x in range(8):
             for y in range(8):
                 translated = [x if self.engine.turn else 7-x, 7-y if self.engine.turn else y]
@@ -129,15 +152,15 @@ class Chess(_chess):
 
                 pygame.draw.rect(self.surf, colour, [x * self.l, y * self.l, self.l, self.l], 0)
                 piece = self.engine.board[translated[1]][translated[0]]
+
+                if translated in squares:
+                    pygame.draw.circle(self.surf, (0, 0, 0), [int((x + 0.5) * self.l), int((y + 0.5) * self.l)], self.l//2, 2)
                 
                 if not piece:
                     continue
 
                 icon = self.img[piece.colour][piece.__class__.__name__.capitalize()]
                 self.surf.blit(icon, icon.get_rect(center=[x * self.l + (self.l/2), y * self.l + (self.l/2)]))
-
-                if translated in squares:############
-                    pygame.draw.circle(self.surf, (0,0,0), [int((x + 0.5) * self.l), int((y + 0.5) * self.l)], self.l//2, 2)
 
         for p, i in enumerate(self.letters if self.engine.turn else self.letters[::-1]):
             self.surf.blit(i, i.get_rect(center=[p * self.l + (9*self.l/10), self.s[1] - self.l/8]))
@@ -155,6 +178,7 @@ class Chess(_chess):
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 self.move(*self._parse_coords(pygame.mouse.get_pos()))
+                self.draw()
                 return True
 
     def move_event_listener(self):
@@ -275,6 +299,9 @@ class ChessText(_chess):
 
         elif move == "FENBOARD":
             return self.fenboard()
+
+        elif move == "F":######################## remove
+            return self.engine.fens
 
         if not legal:
             return "Invalid move, re-enter."
