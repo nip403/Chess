@@ -6,6 +6,8 @@ Engine ids:
     0 - Standard variant
 """
 
+# TODO: optimise engine so that check detection takes place in pieceengine class, not engine class
+
 class Engine:
     meta = "Chess" # Standard variant engine
 
@@ -24,7 +26,23 @@ class Engine:
 
         moves = PieceEngine.get_moves(piece, square, self.board, self.en_passant_eligible)
 
-        return moves, []
+        # decompose movelist
+        if type(piece) == King:
+            moves, castle = moves
+        elif type(piece) == Pawn:
+            mvoes, ep = moves
+
+        # check detection
+        ######TODO incomplete
+
+        return moves, castle, ep
+
+    def move_without_validation(self, start, end, flags):
+        if hasattr(self.board[start[1]][start[0]], "moved"):
+            self.board[start[1]][start[0]].moved = True
+
+        self.board[coords[1]][coords[0]] = self.board[start[1]][start[0]] # do proper move BUG BUG
+        self.board[selected[1]][selected[0]] = 0
 
     def move(self, move, handle):
         # N.B. return values from this function goes as follows:
@@ -119,7 +137,6 @@ class Engine:
             self.fens = {} # threefold repetition cleared after succesful capture
 
         if type(piece) == Pawn:
-
             # update en passant eligibility
             self.board[end_y][end_x].moved = True
             self.fens = {} # threefold repetition cleared after en passant
@@ -767,7 +784,7 @@ class PieceEngine:
             if not 0 <= i[0] < 8 or not 0 <= i[1] < 8:
                 continue
 
-            if not board[i[1]][i[0]] or not board[i[1]][i[0]].colour == colour:
+            if not PieceEngine.in_check(colour, board, i) and (not board[i[1]][i[0]] or not board[i[1]][i[0]].colour == colour):
                 moves.append(i)
 
         # castling logic
